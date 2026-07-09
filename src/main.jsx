@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { createRoot } from "react-dom/client";
+import { TIDE_STATIONS } from "./tideStations.js";
 
 const TRIPS_KEY = "kayak-fishing-trips";
 const JIGS_KEY = "kayak-jig-inventory";
@@ -60,6 +61,117 @@ function cuid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 }
 
+// ===== 気象・潮の自動取得（Open-Meteo + tide736） =====
+const COMPASS = ["北", "北北東", "北東", "東北東", "東", "東南東", "南東", "南南東", "南", "南南西", "南西", "西南西", "西", "西北西", "北西", "北北西"];
+const dirText = (deg) => COMPASS[Math.round(deg / 22.5) % 16];
+
+// WMO天気コード → 日本語
+const WMO_TEXT = {
+  0: "快晴", 1: "晴れ", 2: "晴れ時々曇り", 3: "曇り",
+  45: "霧", 48: "霧氷",
+  51: "弱い霧雨", 53: "霧雨", 55: "強い霧雨", 56: "着氷性の霧雨", 57: "着氷性の霧雨",
+  61: "弱い雨", 63: "雨", 65: "強い雨", 66: "みぞれ", 67: "みぞれ",
+  71: "弱い雪", 73: "雪", 75: "強い雪", 77: "霧雪",
+  80: "にわか雨", 81: "にわか雨", 82: "激しいにわか雨", 85: "にわか雪", 86: "にわか雪",
+  95: "雷雨", 96: "雷雨(ひょう)", 99: "雷雨(ひょう)",
+};
+const weatherText = (code) => WMO_TEXT[code] ?? `天気コード${code}`;
+
+function haversine(a, b, c, d) {
+  const R = 6371, toR = (x) => x * Math.PI / 180;
+  const dLat = toR(c - a), dLon = toR(d - b);
+  const s = Math.sin(dLat / 2) ** 2 + Math.cos(toR(a)) * Math.cos(toR(c)) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(s));
+}
+function nearestStation(lat, lon) {
+  let best = null, bd = Infinity;
+  for (const s of TIDE_STATIONS) {
+    const d = haversine(lat, lon, s[2], s[3]);
+    if (d < bd) { bd = d; best = s; }
+  }
+  return { pc: best[0], hc: best[1], name: best[4], dist: bd };
+}
+function getJSON(url) {
+  return fetch(url).then((r) => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); });
+}
+function getPosition() {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) { reject(new Error("no geolocation")); return; }
+    navigator.geolocation.getCurrentPosition(
+      (p) => resolve({ lat: p.coords.latitude, lon: p.coords.longitude }),
+      (e) => reject(e),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+    );
+  });
+}
+
+// 指定日付(YYYY-MM-DD)の、現在時刻に近い時間の気象・海況・潮をまとめて取得
+async function fetchConditions(lat, lon, dateStr) {
+  const tz = "Asia/Tokyo";
+  const base = `latitude=${lat}&longitude=${lon}&timezone=${encodeURIComponent(tz)}&forecast_days=3`;
+  const wxUrl = `https://api.open-meteo.com/v1/forecast?${base}&hourly=weather_code,wind_speed_10m,wind_direction_10m&wind_speed_unit=ms`;
+  const marUrl = `https://marine-api.open-meteo.com/v1/marine?${base}&hourly=wave_height,sea_surface_temperature`;
+  const st = nearestStation(lat, lon);
+  const [y, m, d] = dateStr.split("-");
+  const tideUrl = `https://tide736.net/api/get_tide.php?pc=${st.pc}&hc=${st.hc}&yr=${+y}&mn=${+m}&dy=${+d}&rg=day`;
+
+  const [wx, mar, tide] = await Promise.all([
+    getJSON(wxUrl).catch(() => null),
+    getJSON(marUrl).catch(() => null),
+    getJSON(tideUrl).catch(() => null),
+  ]);
+
+  // 対象時刻: 今日なら現在の時、それ以外は12時
+  const now = new Date();
+  const todayStr = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+  let hour = 12;
+  if (dateStr === todayStr) {
+    hour = +new Intl.DateTimeFormat("en-GB", { timeZone: tz, hour: "2-digit", hour12: false }).format(now);
+  }
+  const target = `${dateStr}T${String(hour).padStart(2, "0")}:00`;
+  const findIdx = (times) => {
+    if (!times) return -1;
+    const exact = times.indexOf(target);
+    if (exact >= 0) return exact;
+    for (let i = 0; i < times.length; i++) if (times[i].slice(0, 10) === dateStr) return i;
+    return -1;
+  };
+
+  const out = {};
+  const wi = findIdx(wx?.hourly?.time);
+  if (wi >= 0) {
+    const code = wx.hourly.weather_code[wi];
+    const ws = wx.hourly.wind_speed_10m[wi];
+    const wd = wx.hourly.wind_direction_10m[wi];
+    if (code != null) out.weather = weatherText(code);
+    if (ws != null && wd != null) out.wind = `${dirText(wd)} ${Number(ws).toFixed(1)}m/s`;
+  }
+  const mi = findIdx(mar?.hourly?.time);
+  if (mi >= 0) {
+    const wave = mar.hourly.wave_height[mi];
+    const sst = mar.hourly.sea_surface_temperature[mi];
+    if (wave != null) out.waveHeight = `${Number(wave).toFixed(1)}m`;
+    if (sst != null) out.waterTemp = `${Number(sst).toFixed(1)}℃`;
+  }
+  const chart = tide?.tide?.chart;
+  let gotTide = false;
+  if (chart) {
+    const day = chart[Object.keys(chart)[0]];
+    if (day) {
+      gotTide = true;
+      const title = day.moon?.title;
+      if (title && TIDE_OPTIONS.includes(title)) out.tide = title;
+      const flood = (day.flood || []).map((x) => x.time.slice(0, 5));
+      const edd = (day.edd || []).map((x) => x.time.slice(0, 5));
+      const parts = [];
+      if (flood.length) parts.push(`満潮 ${flood.join("/")}`);
+      if (edd.length) parts.push(`干潮 ${edd.join("/")}`);
+      if (parts.length) out.tideDetail = parts.join("、");
+    }
+  }
+  return { out, station: st.name, gotWx: wi >= 0, gotMar: mi >= 0, gotTide };
+}
+
 function FishingLog() {
   const [trips, setTrips] = useState([]);
   const [jigs, setJigs] = useState([]);
@@ -70,6 +182,7 @@ function FishingLog() {
   const [showHelp, setShowHelp] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [autoLoading, setAutoLoading] = useState(false);
   const [toast, setToast] = useState("");
   const [openId, setOpenId] = useState(null);
   const importRef = useRef(null);
@@ -148,6 +261,31 @@ function FishingLog() {
 
   const handleChange = (key) => (e) => {
     setForm((f) => ({ ...f, [key]: e.target.value }));
+  };
+
+  // 現在地の気象・海況・潮を取得して、その日の条件欄を自動で埋める
+  const autofill = async () => {
+    setAutoLoading(true);
+    try {
+      const { lat, lon } = await getPosition();
+      const { out, station, gotWx, gotMar, gotTide } = await fetchConditions(lat, lon, form.date);
+      setForm((f) => ({
+        ...f,
+        ...out,
+        locationTag: f.locationTag || `${lat.toFixed(4)}, ${lon.toFixed(4)}`,
+      }));
+      const miss = [];
+      if (!gotWx) miss.push("天気/風");
+      if (!gotMar) miss.push("波/水温");
+      if (!gotTide) miss.push("潮");
+      showToast(miss.length ? `一部取得できず(${miss.join("・")})は手入力を` : `自動入力しました(潮:${station})`);
+    } catch (e) {
+      const msg = e && e.code === 1 ? "位置情報が許可されていません"
+        : (!navigator.onLine ? "オフラインのため取得できません。電波のある場所で" : "取得に失敗しました。手入力してください");
+      showToast(msg);
+    } finally {
+      setAutoLoading(false);
+    }
   };
 
   const handleCatchChange = (id, key) => (e) => {
@@ -445,6 +583,23 @@ function FishingLog() {
 
         <form onSubmit={handleSubmit} style={{ background: "#fff", border: "1px solid #e0e0e0", borderRadius: "6px", padding: "20px", marginBottom: "24px" }}>
           <div style={sectionLabel}>その日の条件(釣行全体で共通)</div>
+
+          <button
+            type="button"
+            onClick={autofill}
+            disabled={autoLoading}
+            style={{
+              width: "100%", padding: "11px", marginBottom: "6px",
+              background: autoLoading ? "#eef3fa" : "#eaf1fb", color: "#2c5a9e",
+              border: "1px solid #4a7dbd", borderRadius: "6px",
+              fontSize: "14px", fontWeight: 600, cursor: autoLoading ? "default" : "pointer",
+            }}
+          >
+            {autoLoading ? "取得中…" : "📍 現在地から自動入力（天気・風・波・水温・潮）"}
+          </button>
+          <div style={{ fontSize: "11px", color: "#999", marginBottom: "16px" }}>
+            電波のある出艇地点で押すと、いまの気象・海況と今日の潮を自動で埋めます（各欄は後から手直しできます）
+          </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
             <div>
