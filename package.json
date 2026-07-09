@@ -1,0 +1,21 @@
+{
+  "name": "kayak-fishing-log",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build": "esbuild src/main.jsx --bundle --minify --format=iife --loader:.jsx=jsx --jsx=automatic --outfile=app.js",
+    "icons": "python3 make_icon.py"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "esbuild": "^0.28.1"
+  },
+  "dependencies": {
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
+  }
+}
