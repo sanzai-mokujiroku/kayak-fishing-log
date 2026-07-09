@@ -1,6 +1,6 @@
 // 釣行記録 サービスワーカー: アプリ本体をキャッシュし、電波の無い場所でも起動できるようにする。
 // アプリを更新したら CACHE の番号を上げる(古いキャッシュを破棄するため)。
-const CACHE = "fishing-log-v2";
+const CACHE = "fishing-log-v3";
 const ASSETS = [
   "./",
   "./index.html",

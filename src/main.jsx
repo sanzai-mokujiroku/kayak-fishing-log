@@ -951,8 +951,9 @@ function FishingLog() {
           </div>
         )}
 
-        <footer style={{ marginTop: "28px", fontSize: "11px", color: "#aaa", textAlign: "center" }}>
-          記録はこの端末のブラウザにのみ保存されます(個人用ツール)。
+        <footer style={{ marginTop: "28px", fontSize: "11px", color: "#aaa", textAlign: "center", lineHeight: 1.7 }}>
+          記録はこの端末のブラウザにのみ保存されます(個人用ツール)。<br />
+          気象・海況: Open-Meteo（CC BY 4.0）／潮汐: tide736.net（気象庁 潮位表をもとに算出）
         </footer>
       </div>
 
