@@ -281,6 +281,9 @@ function FishingLog() {
   const [tideLoadingId, setTideLoadingId] = useState(null);
   const [toast, setToast] = useState("");
   const [openId, setOpenId] = useState(null);
+  const [listView, setListView] = useState("list");   // "list" | "calendar"
+  const [calCursor, setCalCursor] = useState(null);    // {y,m} 表示中の月（未設定なら自動）
+  const [selDate, setSelDate] = useState(null);        // カレンダーで選択中の日付 YYYY-MM-DD
   const importRef = useRef(null);
 
   const showToast = useCallback((msg) => {
@@ -612,6 +615,174 @@ function FishingLog() {
     boxSizing: "border-box",
   };
   const sectionLabel = { fontSize: "11px", color: "#888", marginBottom: "10px", fontWeight: 600 };
+
+  // ===== 過去ログ表示の共通部品（一覧・カレンダー両方で使う） =====
+  const pad2 = (n) => String(n).padStart(2, "0");
+  const tripHasFish = (t) => (t.catches || []).some((c) => (c.species || "").trim());
+  // 日付 → その日の釣行[]
+  const tripsByDate = {};
+  for (const t of trips) { if (t && t.date) (tripsByDate[t.date] = tripsByDate[t.date] || []).push(t); }
+  // 表示中の月（未設定なら最新記録の月、無ければ今月）
+  const _now = new Date();
+  let cur = calCursor;
+  if (!cur) {
+    const latest = trips.map((t) => t && t.date).filter(Boolean).sort().slice(-1)[0];
+    cur = latest ? { y: +latest.slice(0, 4), m: +latest.slice(5, 7) } : { y: _now.getFullYear(), m: _now.getMonth() + 1 };
+  }
+  const shiftMonth = (delta) => {
+    let y = cur.y, m = cur.m + delta;
+    if (m < 1) { m = 12; y--; } else if (m > 12) { m = 1; y++; }
+    setCalCursor({ y, m });
+  };
+
+  // 釣行1件の展開カード（一覧・カレンダーで共通）
+  const tripCard = (trip) => {
+    const isOpen = openId === trip.id;
+    const moodLabel = MOOD_OPTIONS.find((m) => m.v == trip.mood)?.label;
+    return (
+      <div key={trip.id} style={{ background: "#fff", border: "1px solid #e0e0e0", borderRadius: "6px", overflow: "hidden" }}>
+        <button
+          onClick={() => setOpenId(isOpen ? null : trip.id)}
+          style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px", background: "transparent", border: "none", cursor: "pointer", textAlign: "left" }}
+        >
+          <div>
+            <div style={{ fontSize: "14px", fontWeight: 600 }}>
+              {trip.date} {trip.locationTag && `／ ${trip.locationTag}`}
+            </div>
+            <div style={{ fontSize: "12px", color: "#888" }}>
+              {catchSummary(trip)}{moodLabel && ` ・ ${moodLabel}`}
+            </div>
+          </div>
+          <span style={{ color: "#999", fontSize: "12px" }}>{isOpen ? "閉じる" : "詳細"}</span>
+        </button>
+
+        {isOpen && (
+          <div style={{ padding: "0 14px 16px", fontSize: "13px", lineHeight: 1.7 }}>
+            <div style={{ borderTop: "1px solid #eee", paddingTop: "12px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 16px", marginBottom: "12px", color: "#555" }}>
+              <span>潮回り: {trip.tide}</span>
+              <span>天気: {trip.weather || "-"}</span>
+              <span>風: {trip.wind || "-"}</span>
+              <span>波高: {trip.waveHeight || "-"}</span>
+              <span>水温: {trip.waterTemp || "-"}</span>
+              {trip.tideDetail && <span style={{ gridColumn: "1 / -1" }}>潮汐: {trip.tideDetail}</span>}
+            </div>
+
+            {trip.catches && trip.catches.length > 0 ? (
+              <div style={{ marginBottom: "10px" }}>
+                <b>釣果({trip.catches.length}件):</b>
+                <ol style={{ margin: "6px 0 0", paddingLeft: "20px" }}>
+                  {trip.catches.map((c) => (
+                    <li key={c.id} style={{ marginBottom: "4px" }}>
+                      {c.time && <b>{c.time} </b>}
+                      {catchLabel(c) || "反応のみ"}
+                      {(c.jig || c.action || c.responseLayer) && (
+                        <span style={{ color: "#888" }}>
+                          {" "}(ジグ:{c.jig || "-"}／アクション:{c.action || "-"}／層:{c.responseLayer || "-"})
+                        </span>
+                      )}
+                      {c.note && <span style={{ color: "#888" }}> ／{c.note}</span>}
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            ) : (
+              <div style={{ marginBottom: "10px", color: "#888" }}>釣果: ボウズ</div>
+            )}
+
+            <div style={{ marginBottom: "10px" }}><b>考察: </b>{trip.reflection || "-"}</div>
+
+            {trip.tideCurve ? (
+              <div style={{ marginBottom: "12px" }}>
+                <TideChart curve={trip.tideCurve} hi={trip.tideHi} lo={trip.tideLo} catches={trip.catches || []} station={trip.tideStation} />
+              </div>
+            ) : /(-?\d{1,3}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)/.test(trip.locationTag || "") ? (
+              <button
+                onClick={() => attachTideCurve(trip)}
+                disabled={tideLoadingId === trip.id}
+                style={{ fontSize: "12px", color: "#2c5a9e", background: "#eaf1fb", border: "1px solid #4a7dbd", borderRadius: "4px", padding: "6px 12px", marginBottom: "12px", cursor: "pointer" }}
+              >
+                {tideLoadingId === trip.id ? "取得中…" : "潮汐グラフを取得"}
+              </button>
+            ) : null}
+
+            <div style={{ display: "flex", gap: "10px" }}>
+              <button onClick={() => copyOne(trip)} style={{ fontSize: "12px", color: "#4a7dbd", background: "transparent", border: "1px solid #4a7dbd", borderRadius: "4px", padding: "6px 12px", cursor: "pointer" }}>コピー</button>
+              <button onClick={() => handleDelete(trip.id)} style={{ fontSize: "12px", color: "#c0392b", background: "transparent", border: "1px solid #c0392b", borderRadius: "4px", padding: "6px 12px", cursor: "pointer" }}>削除</button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // カレンダー表示
+  const calendarView = () => {
+    const startW = new Date(cur.y, cur.m - 1, 1).getDay();
+    const daysIn = new Date(cur.y, cur.m, 0).getDate();
+    const todayStr = `${_now.getFullYear()}-${pad2(_now.getMonth() + 1)}-${pad2(_now.getDate())}`;
+    const cells = [];
+    for (let i = 0; i < startW; i++) cells.push(null);
+    for (let d = 1; d <= daysIn; d++) cells.push(d);
+    const WD = ["日", "月", "火", "水", "木", "金", "土"];
+    const selTrips = selDate ? (tripsByDate[selDate] || []) : [];
+    return (
+      <div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" }}>
+          <button onClick={() => shiftMonth(-1)} style={{ fontSize: "18px", color: "#4a7dbd", background: "transparent", border: "1px solid #cdd8e6", borderRadius: "8px", width: "40px", height: "36px", cursor: "pointer" }}>‹</button>
+          <div style={{ fontSize: "16px", fontWeight: 700 }}>{cur.y}年{cur.m}月</div>
+          <button onClick={() => shiftMonth(1)} style={{ fontSize: "18px", color: "#4a7dbd", background: "transparent", border: "1px solid #cdd8e6", borderRadius: "8px", width: "40px", height: "36px", cursor: "pointer" }}>›</button>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "4px", marginBottom: "4px" }}>
+          {WD.map((w, i) => (
+            <div key={w} style={{ textAlign: "center", fontSize: "11px", fontWeight: 600, color: i === 0 ? "#c0392b" : i === 6 ? "#2c5a9e" : "#888", padding: "2px 0" }}>{w}</div>
+          ))}
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "4px" }}>
+          {cells.map((d, i) => {
+            if (d == null) return <div key={"e" + i} />;
+            const ds = `${cur.y}-${pad2(cur.m)}-${pad2(d)}`;
+            const dayTrips = tripsByDate[ds] || [];
+            const has = dayTrips.length > 0;
+            const fish = dayTrips.some(tripHasFish);
+            const isSel = selDate === ds;
+            const isToday = ds === todayStr;
+            const bg = isSel ? "#4a7dbd" : has ? (fish ? "#e7f3ec" : "#f0f0f0") : "transparent";
+            const fg = isSel ? "#fff" : has ? (fish ? "#2e7d5b" : "#999") : "#bbb";
+            return (
+              <button
+                key={ds}
+                onClick={() => setSelDate(isSel ? null : has ? ds : ds)}
+                style={{
+                  aspectRatio: "1 / 1", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                  background: bg, color: fg, border: isToday && !isSel ? "2px solid #4a7dbd" : "1px solid #eee",
+                  borderRadius: "8px", cursor: "pointer", fontSize: "14px", fontWeight: has ? 700 : 400, padding: 0,
+                }}
+              >
+                {d}
+                {has && <span style={{ fontSize: "10px", lineHeight: 1, marginTop: "2px" }}>{fish ? "🎣" : "・"}{dayTrips.length > 1 ? dayTrips.length : ""}</span>}
+              </button>
+            );
+          })}
+        </div>
+        <div style={{ marginTop: "14px" }}>
+          {selDate ? (
+            selTrips.length ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                <div style={{ fontSize: "13px", color: "#555", fontWeight: 600 }}>{selDate} の釣行（{selTrips.length}件）</div>
+                {selTrips.map(tripCard)}
+              </div>
+            ) : (
+              <div style={{ border: "1px dashed #ccc", borderRadius: "6px", padding: "20px 16px", textAlign: "center", color: "#999", fontSize: "13px" }}>
+                {selDate} は記録なし
+              </div>
+            )
+          ) : (
+            <div style={{ textAlign: "center", color: "#aaa", fontSize: "12px", padding: "8px" }}>🎣 の日をタップすると詳細が見られます</div>
+          )}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div style={{ minHeight: "100vh", background: "#fafafa", color: "#222", fontFamily: "-apple-system, 'Hiragino Sans', sans-serif", padding: "20px 16px 80px" }}>
@@ -968,6 +1139,13 @@ function FishingLog() {
           )}
         </div>
 
+        {trips.length > 0 && (
+          <div style={{ display: "flex", gap: "6px", marginBottom: "10px" }}>
+            <button onClick={() => setListView("list")} style={{ flex: 1, fontSize: "13px", fontWeight: 600, padding: "8px", borderRadius: "8px", cursor: "pointer", border: "1px solid " + (listView === "list" ? "#4a7dbd" : "#ccc"), background: listView === "list" ? "#4a7dbd" : "#fff", color: listView === "list" ? "#fff" : "#555" }}>≡ 一覧</button>
+            <button onClick={() => setListView("calendar")} style={{ flex: 1, fontSize: "13px", fontWeight: 600, padding: "8px", borderRadius: "8px", cursor: "pointer", border: "1px solid " + (listView === "calendar" ? "#4a7dbd" : "#ccc"), background: listView === "calendar" ? "#4a7dbd" : "#fff", color: listView === "calendar" ? "#fff" : "#555" }}>📅 カレンダー</button>
+          </div>
+        )}
+
         {/* バックアップ(端末内データの命綱) */}
         <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center", marginBottom: "8px" }}>
           <button
@@ -1003,6 +1181,8 @@ function FishingLog() {
           <div style={{ border: "1px dashed #ccc", borderRadius: "6px", padding: "28px 16px", textAlign: "center", color: "#999", fontSize: "13px" }}>
             まだ記録がありません
           </div>
+        ) : listView === "calendar" ? (
+          calendarView()
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
             {trips.map((trip) => {
