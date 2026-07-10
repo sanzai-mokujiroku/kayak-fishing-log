@@ -105,20 +105,39 @@ function getPosition() {
   });
 }
 
+// "HH:MM" → 0時からの分。"24:00"=1440 も許容
+const toMin = (hhmm) => { const [h, m] = hhmm.split(":").map(Number); return h * 60 + m; };
+
+// 指定日付(YYYY-MM-DD)・最寄り観測点の潮位カーブ(20分刻み)と満潮/干潮を取得
+async function fetchTideCurve(lat, lon, dateStr) {
+  const st = nearestStation(lat, lon);
+  const [y, m, d] = dateStr.split("-");
+  const url = `https://tide736.net/api/get_tide.php?pc=${st.pc}&hc=${st.hc}&yr=${+y}&mn=${+m}&dy=${+d}&rg=day`;
+  const tide = await getJSON(url);
+  const chart = tide?.tide?.chart;
+  if (!chart) return null;
+  const day = chart[Object.keys(chart)[0]];
+  if (!day || !Array.isArray(day.tide)) return null;
+  return {
+    curve: day.tide.map((x) => ({ m: toMin(x.time), cm: x.cm })),   // [{分, 潮位cm}]
+    hi: (day.flood || []).map((x) => x.time.slice(0, 5)),           // 満潮の時刻
+    lo: (day.edd || []).map((x) => x.time.slice(0, 5)),             // 干潮の時刻
+    title: day.moon?.title || "",                                   // 大潮/中潮など
+    station: st.name,
+  };
+}
+
 // 指定日付(YYYY-MM-DD)の、現在時刻に近い時間の気象・海況・潮をまとめて取得
 async function fetchConditions(lat, lon, dateStr) {
   const tz = "Asia/Tokyo";
   const base = `latitude=${lat}&longitude=${lon}&timezone=${encodeURIComponent(tz)}&forecast_days=3`;
   const wxUrl = `https://api.open-meteo.com/v1/forecast?${base}&hourly=weather_code,wind_speed_10m,wind_direction_10m&wind_speed_unit=ms`;
   const marUrl = `https://marine-api.open-meteo.com/v1/marine?${base}&hourly=wave_height,sea_surface_temperature`;
-  const st = nearestStation(lat, lon);
-  const [y, m, d] = dateStr.split("-");
-  const tideUrl = `https://tide736.net/api/get_tide.php?pc=${st.pc}&hc=${st.hc}&yr=${+y}&mn=${+m}&dy=${+d}&rg=day`;
 
-  const [wx, mar, tide] = await Promise.all([
+  const [wx, mar, tideData] = await Promise.all([
     getJSON(wxUrl).catch(() => null),
     getJSON(marUrl).catch(() => null),
-    getJSON(tideUrl).catch(() => null),
+    fetchTideCurve(lat, lon, dateStr).catch(() => null),
   ]);
 
   // 対象時刻: 今日なら現在の時、それ以外は12時
@@ -153,23 +172,99 @@ async function fetchConditions(lat, lon, dateStr) {
     if (wave != null) out.waveHeight = `${Number(wave).toFixed(1)}m`;
     if (sst != null) out.waterTemp = `${Number(sst).toFixed(1)}℃`;
   }
-  const chart = tide?.tide?.chart;
-  let gotTide = false;
-  if (chart) {
-    const day = chart[Object.keys(chart)[0]];
-    if (day) {
-      gotTide = true;
-      const title = day.moon?.title;
-      if (title && TIDE_OPTIONS.includes(title)) out.tide = title;
-      const flood = (day.flood || []).map((x) => x.time.slice(0, 5));
-      const edd = (day.edd || []).map((x) => x.time.slice(0, 5));
-      const parts = [];
-      if (flood.length) parts.push(`満潮 ${flood.join("/")}`);
-      if (edd.length) parts.push(`干潮 ${edd.join("/")}`);
-      if (parts.length) out.tideDetail = parts.join("、");
-    }
+  if (tideData) {
+    if (tideData.title && TIDE_OPTIONS.includes(tideData.title)) out.tide = tideData.title;
+    const parts = [];
+    if (tideData.hi.length) parts.push(`満潮 ${tideData.hi.join("/")}`);
+    if (tideData.lo.length) parts.push(`干潮 ${tideData.lo.join("/")}`);
+    if (parts.length) out.tideDetail = parts.join("、");
+    out.tideCurve = tideData.curve;      // グラフ用に保存
+    out.tideStation = tideData.station;
+    out.tideHi = tideData.hi;
+    out.tideLo = tideData.lo;
   }
-  return { out, station: st.name, gotWx: wi >= 0, gotMar: mi >= 0, gotTide };
+  return { out, station: tideData?.station || "?", gotWx: wi >= 0, gotMar: mi >= 0, gotTide: !!tideData };
+}
+
+// 潮位カーブに釣れた時刻(ヒット時刻)を重ねて描くグラフ
+function TideChart({ curve, hi = [], lo = [], catches = [], station }) {
+  if (!Array.isArray(curve) || curve.length < 2) return null;
+  const W = 340, H = 150;
+  const padL = 6, padR = 6, padT = 22, padB = 20;
+  const cms = curve.map((p) => p.cm);
+  let minCm = Math.min(...cms), maxCm = Math.max(...cms);
+  if (maxCm - minCm < 1) maxCm = minCm + 1;
+  const pad = (maxCm - minCm) * 0.12;
+  minCm -= pad; maxCm += pad;
+  const x = (min) => padL + (min / 1440) * (W - padL - padR);
+  const y = (cm) => padT + (1 - (cm - minCm) / (maxCm - minCm)) * (H - padT - padB);
+  // 端のラベルが切れないよう、位置に応じて寄せを変える
+  const anchorFor = (px) => (px < 30 ? "start" : px > W - 30 ? "end" : "middle");
+
+  // 任意の分での潮位を線形補間
+  const cmAt = (min) => {
+    if (min <= curve[0].m) return curve[0].cm;
+    if (min >= curve[curve.length - 1].m) return curve[curve.length - 1].cm;
+    for (let i = 1; i < curve.length; i++) {
+      if (min <= curve[i].m) {
+        const a = curve[i - 1], b = curve[i];
+        const t = (min - a.m) / (b.m - a.m || 1);
+        return a.cm + (b.cm - a.cm) * t;
+      }
+    }
+    return curve[curve.length - 1].cm;
+  };
+
+  const linePts = curve.map((p) => `${x(p.m).toFixed(1)},${y(p.cm).toFixed(1)}`).join(" ");
+  const areaPts = `${x(curve[0].m).toFixed(1)},${(H - padB).toFixed(1)} ${linePts} ${x(curve[curve.length - 1].m).toFixed(1)},${(H - padB).toFixed(1)}`;
+
+  const hits = catches
+    .filter((c) => /^\d{1,2}:\d{2}$/.test((c.time || "").trim()))
+    .map((c) => {
+      const min = toMin(c.time);
+      return { min, cm: cmAt(min), time: c.time, label: (c.species || "").trim() };
+    });
+
+  return (
+    <div style={{ marginTop: "10px" }}>
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block", height: "auto", background: "#f7fafd", borderRadius: "6px" }} role="img" aria-label="潮位カーブと釣れた時刻">
+        {/* 縦の時間グリッド 0/6/12/18/24時 */}
+        {[0, 6, 12, 18, 24].map((h) => (
+          <g key={h}>
+            <line x1={x(h * 60)} y1={padT - 4} x2={x(h * 60)} y2={H - padB} stroke="#e2ebf3" strokeWidth="1" />
+            <text x={x(h * 60)} y={H - 6} fontSize="9" fill="#9aa7b4" textAnchor={h === 0 ? "start" : h === 24 ? "end" : "middle"}>{h}時</text>
+          </g>
+        ))}
+        {/* 潮位カーブ */}
+        <polygon points={areaPts} fill="#4a7dbd" opacity="0.10" />
+        <polyline points={linePts} fill="none" stroke="#4a7dbd" strokeWidth="2" strokeLinejoin="round" />
+        {/* 満潮/干潮マーカー */}
+        {hi.map((t, i) => (
+          <g key={"hi" + i}>
+            <circle cx={x(toMin(t))} cy={y(cmAt(toMin(t)))} r="2.5" fill="#4a7dbd" />
+            <text x={x(toMin(t))} y={y(cmAt(toMin(t))) - 6} fontSize="8.5" fill="#4a7dbd" textAnchor={anchorFor(x(toMin(t)))}>満{t}</text>
+          </g>
+        ))}
+        {lo.map((t, i) => (
+          <g key={"lo" + i}>
+            <circle cx={x(toMin(t))} cy={y(cmAt(toMin(t)))} r="2.5" fill="#7f9bb8" />
+            <text x={x(toMin(t))} y={y(cmAt(toMin(t))) + 12} fontSize="8.5" fill="#7f9bb8" textAnchor={anchorFor(x(toMin(t)))}>干{t}</text>
+          </g>
+        ))}
+        {/* 釣れた時刻 */}
+        {hits.map((h, i) => (
+          <g key={"hit" + i}>
+            <line x1={x(h.min)} y1={y(h.cm)} x2={x(h.min)} y2={H - padB} stroke="#c0392b" strokeWidth="1" opacity="0.35" />
+            <circle cx={x(h.min)} cy={y(h.cm)} r="4.5" fill="#c0392b" stroke="#fff" strokeWidth="1.5" />
+            <text x={x(h.min)} y={padT - 12} fontSize="9" fill="#c0392b" fontWeight="600" textAnchor={anchorFor(x(h.min))}>{h.time}</text>
+          </g>
+        ))}
+      </svg>
+      <div style={{ fontSize: "10.5px", color: "#9aa7b4", marginTop: "4px", textAlign: "center" }}>
+        <span style={{ color: "#4a7dbd" }}>—</span> 潮位{station ? `（${station}）` : ""}　<span style={{ color: "#c0392b" }}>●</span> 釣れた時刻
+      </div>
+    </div>
+  );
 }
 
 function FishingLog() {
@@ -183,6 +278,7 @@ function FishingLog() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [autoLoading, setAutoLoading] = useState(false);
+  const [tideLoadingId, setTideLoadingId] = useState(null);
   const [toast, setToast] = useState("");
   const [openId, setOpenId] = useState(null);
   const importRef = useRef(null);
@@ -339,6 +435,30 @@ function FishingLog() {
     await persistTrips(next);
     window.scrollTo({ top: 0, behavior: "smooth" });
     showToast("記録しました");
+  };
+
+  // 既存の釣行に、あとから潮汐グラフを取得して付ける(場所に緯度経度が入っている場合)
+  const attachTideCurve = async (trip) => {
+    const mtch = (trip.locationTag || "").match(/(-?\d{1,3}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)/);
+    if (!mtch) {
+      showToast("この釣行は場所に緯度経度が無く取得できません");
+      return;
+    }
+    setTideLoadingId(trip.id);
+    try {
+      const td = await fetchTideCurve(+mtch[1], +mtch[2], trip.date);
+      if (!td) { showToast("潮汐データを取得できませんでした"); return; }
+      const next = trips.map((t) => t.id === trip.id
+        ? { ...t, tideCurve: td.curve, tideStation: td.station, tideHi: td.hi, tideLo: td.lo }
+        : t);
+      setTrips(next);
+      await persistTrips(next);
+      showToast(`潮汐グラフを追加しました(${td.station})`);
+    } catch (e) {
+      showToast(navigator.onLine ? "取得に失敗しました" : "オフラインのため取得できません");
+    } finally {
+      setTideLoadingId(null);
+    }
   };
 
   const handleDelete = async (id) => {
@@ -939,6 +1059,22 @@ function FishingLog() {
                       )}
 
                       <div style={{ marginBottom: "10px" }}><b>考察: </b>{trip.reflection || "-"}</div>
+
+                      {/* 潮汐グラフ(釣れた時刻を重ねる) */}
+                      {trip.tideCurve ? (
+                        <div style={{ marginBottom: "12px" }}>
+                          <TideChart curve={trip.tideCurve} hi={trip.tideHi} lo={trip.tideLo} catches={trip.catches || []} station={trip.tideStation} />
+                        </div>
+                      ) : /(-?\d{1,3}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)/.test(trip.locationTag || "") ? (
+                        <button
+                          onClick={() => attachTideCurve(trip)}
+                          disabled={tideLoadingId === trip.id}
+                          style={{ fontSize: "12px", color: "#2c5a9e", background: "#eaf1fb", border: "1px solid #4a7dbd", borderRadius: "4px", padding: "6px 12px", marginBottom: "12px", cursor: "pointer" }}
+                        >
+                          {tideLoadingId === trip.id ? "取得中…" : "潮汐グラフを取得"}
+                        </button>
+                      ) : null}
+
                       <div style={{ display: "flex", gap: "10px" }}>
                         <button onClick={() => copyOne(trip)} style={{ fontSize: "12px", color: "#4a7dbd", background: "transparent", border: "1px solid #4a7dbd", borderRadius: "4px", padding: "6px 12px", cursor: "pointer" }}>コピー</button>
                         <button onClick={() => handleDelete(trip.id)} style={{ fontSize: "12px", color: "#c0392b", background: "transparent", border: "1px solid #c0392b", borderRadius: "4px", padding: "6px 12px", cursor: "pointer" }}>削除</button>
