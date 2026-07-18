@@ -1359,7 +1359,14 @@ function FishingLog() {
           </div>
         )}
 
-        <footer style={{ marginTop: "28px", fontSize: "11px", color: "#aaa", textAlign: "center", lineHeight: 1.7 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", justifyContent: "center", alignItems: "center", margin: "28px 0 6px" }}>
+          <span style={{ width: "100%", textAlign: "center", color: "#aaa", fontSize: "11px", marginBottom: "2px" }}>姉妹ツール・ブログ</span>
+          {[["https://sanzai-mokujiroku.github.io/kayak-go-check/", "🌊 出艇判断"], ["https://sanzai-mokujiroku.github.io/kayak-fish-forecast/", "🎣 釣果予報"], ["https://kayak-papa.hatenablog.com/", "📖 ブログ「散財黙示録」"]].map(([href, txt]) => (
+            <a key={href} href={href} style={{ color: "#4a7dbd", background: "#fff", border: "1px solid #e0e0e0", borderRadius: "999px", padding: "6px 12px", textDecoration: "none", fontWeight: 600, fontSize: "12px" }}>{txt}</a>
+          ))}
+        </div>
+
+        <footer style={{ marginTop: "16px", fontSize: "11px", color: "#aaa", textAlign: "center", lineHeight: 1.7 }}>
           記録はこの端末のブラウザにのみ保存されます(個人用ツール)。<br />
           気象・海況: Open-Meteo（CC BY 4.0）／潮汐: tide736.net（気象庁 潮位表をもとに算出）
         </footer>
