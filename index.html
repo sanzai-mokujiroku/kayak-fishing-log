@@ -29,10 +29,57 @@
   *{-webkit-tap-highlight-color:transparent}
   html,body{margin:0;padding:0}
   body{background:#fafafa}
+  .guide{max-width:560px;margin:8px auto 28px;background:#fff;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden;
+         font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif}
+  .guide>summary{padding:13px 15px;font-weight:700;font-size:13.5px;color:#1c2733;cursor:pointer;list-style:none}
+  .guide>summary::-webkit-details-marker{display:none}
+  .guide>summary::after{content:"＋";float:right;color:#67778a;font-weight:400}
+  .guide[open]>summary::after{content:"−"}
+  .guide-body{padding:0 15px 15px;font-size:13px;line-height:1.85;color:#1c2733}
+  .guide-body h3{font-size:13px;margin:16px 0 6px;color:#2c5a9e}
+  .guide-body p{margin:0 0 10px}
+  .guide-body ol,.guide-body ul{margin:0 0 10px;padding-left:1.3em}
+  .guide-body li{margin-bottom:5px}
+  .guide-body .note{color:#67778a;font-size:12px}
 </style>
 </head>
 <body>
 <div id="root"></div>
+
+<details class="guide">
+  <summary>使い方と、記録の残り方</summary>
+  <div class="guide-body">
+
+    <h3>これは何のツールか</h3>
+    <p>釣行の記録を残すためのノートです。<b>釣った日・場所・魚・サイズ・ヒットした時刻</b>を書くと、その時の<b>天気・風・水温・潮回り・満潮干潮</b>を自動で埋めてくれます。</p>
+
+    <h3>使い方</h3>
+    <ol>
+      <li><b>「＋ 新しい釣行」</b>で記録を作ります。</li>
+      <li>釣り場で<b>「現在地から自動入力」</b>を押すと、その場所・その時刻の海の状況が一括で入ります。濡れた手で細かい入力をしなくて済みます。</li>
+      <li>釣れたら<b>魚種・サイズ・時刻</b>を足していきます。ボウズの日も記録してください（後で効いてきます）。</li>
+    </ol>
+
+    <h3>潮汐グラフで「どの潮で釣れたか」を見る</h3>
+    <p>記録した釣行を開くと、その日の潮位のカーブが表示され、<b>ヒットした時刻が赤い点で重なります</b>。上げ三分だったのか、満潮前後だったのか——自分の釣果と潮の関係が、一目で分かります。</p>
+    <p class="note">位置情報を持つ過去の釣行は、後から「潮汐グラフを取得」でも追加できます。</p>
+
+    <h3>カレンダーで振り返る</h3>
+    <p>一覧の上部で「📅 カレンダー」に切り替えると、月ごとのグリッドで釣行日を確認できます。釣果があった日は🎣、ボウズの日は点で表示されます。</p>
+
+    <h3>データはどこに保存されるか</h3>
+    <p><b>すべて、お使いの端末の中だけ</b>に保存されます。サーバーには送信されません。作者を含め、誰も見ることはできません。</p>
+    <p>その代わり、<b>端末を変えたりブラウザのデータを消すと、記録も消えます。</b>メニューの<b>バックアップ書き出し</b>でファイルに保存しておくと安心です（機種変更の際は、そのファイルを新しい端末で読み込めば移せます）。</p>
+
+    <h3>ホーム画面に追加すると使いやすい</h3>
+    <p>ブラウザの共有メニューから「ホーム画面に追加」すると、アプリのように開けます。電波の弱い釣り場でも、一度開いていれば起動します（新しくデータを取る操作には通信が必要です）。</p>
+
+    <h3>記録を貯めると、何がいいのか</h3>
+    <p>釣りの「よく言われる話」——この潮がいい、この水温で動く——が、<b>自分の海でも本当にそうなのか</b>は、記録がないと確かめられません。</p>
+    <p>作者は<b>釣果予報ツール</b>も作っていて、そちらの予報とこの記録を突き合わせて「当たっていたか」を確かめようとしています。記録が貯まるほど、自分だけの傾向が見えてきます。</p>
+
+  </div>
+</details>
 <script src="app.js?v=9"></script>
 </body>
 </html>
