@@ -1379,12 +1379,16 @@ function FishingLog() {
           </div>
         )}
 
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", justifyContent: "center", alignItems: "center", margin: "28px 0 6px" }}>
-          <span style={{ width: "100%", textAlign: "center", color: "#aaa", fontSize: "11px", marginBottom: "2px" }}>姉妹ツール・ブログ</span>
-          {[["https://sanzai-mokujiroku.github.io/kayak-go-check/", "🌊 出艇判断"], ["https://sanzai-mokujiroku.github.io/kayak-fish-forecast/", "🎣 釣果予報"], ["https://sanzai-mokujiroku.github.io/kayak-depth-map/", "🗺️ 水深マップ"], ["https://kayak-papa.hatenablog.com/", "📖 ブログ「散財黙示録」"]].map(([href, txt]) => (
-            <a key={href} href={href} style={{ color: "#4a7dbd", background: "#fff", border: "1px solid #e0e0e0", borderRadius: "999px", padding: "6px 12px", textDecoration: "none", fontWeight: 600, fontSize: "12px" }}>{txt}</a>
-          ))}
-        </div>
+        {/* 姉妹ツール：アプリアイコンを並べる（見た目は index.html の .sisters） */}
+        <nav className="sisters" aria-label="姉妹ツールとブログ">
+          <p className="sisters-cap">富山湾カヤックの、姉妹ツール</p>
+          <div className="sisters-row">
+            {[["kayak-go-check", "出艇判断"], ["kayak-fish-forecast", "釣果予報"], ["kayak-depth-map", "水深マップ"]].map(([repo, name]) => (
+              <a key={repo} href={`https://sanzai-mokujiroku.github.io/${repo}/`}><img src={`https://sanzai-mokujiroku.github.io/${repo}/icon-180.png`} alt="" width="58" height="58" loading="lazy" />{name}</a>
+            ))}
+          </div>
+          <a className="blog-link" href="https://kayak-papa.hatenablog.com/">ブログ「富山湾カヤック釣行 散財黙示録」を読む</a>
+        </nav>
 
         <footer style={{ marginTop: "16px", fontSize: "11px", color: "#aaa", textAlign: "center", lineHeight: 1.7 }}>
           記録はこの端末のブラウザにのみ保存されます(個人用ツール)。<br />
