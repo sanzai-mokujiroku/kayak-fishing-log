@@ -938,9 +938,11 @@ function FishingLog() {
       `}</style>
 
       <div style={{ maxWidth: "560px", margin: "0 auto" }}>
-        <header style={{ marginBottom: "16px" }}>
-          <h1 style={{ fontFamily: "'Shippori Mincho B1', 'Hiragino Mincho ProN', 'Yu Mincho', serif", fontWeight: 800, fontSize: "23px", letterSpacing: ".06em", color: "#0a2540", margin: "0 0 4px" }}>釣行記録ノート</h1>
-          <div style={{ fontSize: "13px", color: "#67778a" }}>釣れた魚と時刻を残すと、天気と潮は自動で入ります。釣れなかった日も記録しておくと、あとで効いてきます。</div>
+        {/* 上部の紺の帯（アプリアイコンと同じ紺地に山吹の帳面）。見た目は index.html の .hero */}
+        <header className="hero">
+          <img className="hero-art" src="hero-note.webp" alt="" width="320" height="233" />
+          <h1 className="hero-title">釣行記録ノート</h1>
+          <p className="hero-lead">釣れた魚と時刻を残すと、<br />天気と潮は自動で入ります。<br />釣れなかった日も、記録を。</p>
         </header>
 
         {/* 使い方・注意 */}
