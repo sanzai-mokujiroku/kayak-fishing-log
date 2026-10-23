@@ -287,6 +287,7 @@ function FishingLog() {
   const [newJig, setNewJig] = useState("");
   const [showJigManager, setShowJigManager] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [showCond, setShowCond] = useState(false);   // 天気・潮などの欄（自動入力されるので普段はたたむ）
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [autoLoading, setAutoLoading] = useState(false);
@@ -350,7 +351,7 @@ function FishingLog() {
       const result = await storage.set(JIGS_KEY, JSON.stringify(next), false);
       if (!result) throw new Error("no result");
     } catch (e) {
-      showToast("ジグ在庫の保存に失敗しました");
+      showToast("道具の在庫の保存に失敗しました");
     }
   }, [showToast]);
 
@@ -437,6 +438,7 @@ function FishingLog() {
   // 保存済みの釣行をフォームに読み込んで編集モードに入る
   const startEdit = (trip) => {
     setEditingId(trip.id);
+    setShowCond(true);
     setOpenId(null);
     setForm({
       date: trip.date || todayLocal(),
@@ -566,7 +568,7 @@ function FishingLog() {
       lines.push(`- 釣果(${trip.catches.length}件):`);
       trip.catches.forEach((c, i) => {
         lines.push(
-          `  ${i + 1}. ${c.time ? `[${c.time}] ` : ""}${catchLabel(c) || "反応のみ"}／ジグ:${c.jig || "-"}／アクション:${c.action || "-"}／層:${c.responseLayer || "-"}${c.note ? `／メモ:${c.note}` : ""}`
+          `  ${i + 1}. ${c.time ? `[${c.time}] ` : ""}${catchLabel(c) || "反応のみ"}／道具:${c.jig || "-"}／アクション:${c.action || "-"}／層:${c.responseLayer || "-"}${c.note ? `／メモ:${c.note}` : ""}`
         );
       });
     } else {
@@ -613,7 +615,7 @@ function FishingLog() {
     }
     const headers = [
       "日付", "場所", "潮回り", "潮汐メモ", "天気", "風", "波高", "水温",
-      "ヒット時刻", "魚種", "サイズ", "ジグ", "アクション", "反応層", "1匹メモ",
+      "ヒット時刻", "魚種", "サイズ", "道具", "アクション", "反応層", "1匹メモ",
       "釣行の考察", "満足度",
     ];
     const esc = (v) => {
@@ -678,14 +680,16 @@ function FishingLog() {
   const label = { fontSize: "12px", color: "#555", marginBottom: "4px", display: "block" };
   const input = {
     width: "100%",
-    border: "1px solid #ccc",
-    borderRadius: "4px",
+    border: "1px solid #cfd8e3",
+    borderRadius: "8px",
     padding: "8px 10px",
     fontSize: "16px",
     outline: "none",
     boxSizing: "border-box",
   };
-  const sectionLabel = { fontSize: "11px", color: "#888", marginBottom: "10px", fontWeight: 600 };
+  const sectionLabel = { fontSize: "11px", color: "#67778a", marginBottom: "10px", fontWeight: 700 };
+  // 自動入力された条件の一行まとめ（たたんだ欄の見出しに出す）
+  const condSummary = [form.tide && form.tide !== "不明" ? form.tide : "", form.weather, form.wind && `風 ${form.wind}`, form.waveHeight && `波 ${form.waveHeight}`, form.waterTemp && `水温 ${form.waterTemp}`].filter(Boolean).join("／");
 
   // ===== 過去ログ表示の共通部品（一覧・カレンダー両方で使う） =====
   const pad2 = (n) => String(n).padStart(2, "0");
@@ -748,7 +752,7 @@ function FishingLog() {
                       {catchLabel(c) || "反応のみ"}
                       {(c.jig || c.action || c.responseLayer) && (
                         <span style={{ color: "#888" }}>
-                          {" "}(ジグ:{c.jig || "-"}／アクション:{c.action || "-"}／層:{c.responseLayer || "-"})
+                          {" "}(道具:{c.jig || "-"}／アクション:{c.action || "-"}／層:{c.responseLayer || "-"})
                         </span>
                       )}
                       {c.note && <span style={{ color: "#888" }}> ／{c.note}</span>}
@@ -916,7 +920,7 @@ function FishingLog() {
           {statBox("ボウズ", bozu, totalTrips ? `${Math.round((bozu / totalTrips) * 100)}%` : "")}
         </div>
         {ranked("🐟 魚種別", bySpecies, "#2e7d5b")}
-        {ranked("🎣 ジグ別（釣れた数）", byJig, "#4a7dbd")}
+        {ranked("🎣 道具別（釣れた数）", byJig, "#4a7dbd")}
         {ranked("🌊 潮回り別", byTide, "#7f9bb8")}
         {ranked("🕐 時間帯別", byHour, "#c58a2c")}
         <div style={{ fontSize: "11px", color: "#aaa", marginTop: "4px", lineHeight: 1.6 }}>
@@ -927,19 +931,20 @@ function FishingLog() {
   };
 
   return (
-    <div style={{ minHeight: "100vh", background: "#fafafa", color: "#222", fontFamily: "-apple-system, 'Hiragino Sans', sans-serif", padding: "20px 16px 80px" }}>
+    <div style={{ minHeight: "100vh", background: "#f3f6f9", color: "#1c2733", fontFamily: "-apple-system, BlinkMacSystemFont, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Noto Sans JP', sans-serif", padding: "20px 16px 80px" }}>
       <style>{`
-        input:focus, select:focus, textarea:focus { border-color: #4a7dbd !important; }
+        input:focus, select:focus, textarea:focus { border-color: #0a6cb3 !important; }
+        button:focus-visible, summary:focus-visible { outline: 2px solid #0a6cb3; outline-offset: 2px; }
       `}</style>
 
-      <div style={{ maxWidth: "700px", margin: "0 auto" }}>
+      <div style={{ maxWidth: "560px", margin: "0 auto" }}>
         <header style={{ marginBottom: "16px" }}>
-          <h1 style={{ fontSize: "20px", fontWeight: 700, margin: "0 0 4px" }}>釣行記録</h1>
-          <div style={{ fontSize: "13px", color: "#777" }}>1回の釣行につき1レコード、釣果はその中に複数追加できます</div>
+          <h1 style={{ fontFamily: "'Shippori Mincho B1', 'Hiragino Mincho ProN', 'Yu Mincho', serif", fontWeight: 800, fontSize: "23px", letterSpacing: ".06em", color: "#0a2540", margin: "0 0 4px" }}>釣行記録ノート</h1>
+          <div style={{ fontSize: "13px", color: "#67778a" }}>釣れた魚と時刻を残すと、天気と潮は自動で入ります。釣れなかった日も記録しておくと、あとで効いてきます。</div>
         </header>
 
         {/* 使い方・注意 */}
-        <div style={{ background: "#fff", border: "1px solid #e0e0e0", borderRadius: "6px", marginBottom: "16px", overflow: "hidden" }}>
+        <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: "16px", marginBottom: "12px", overflow: "hidden" }}>
           <button
             onClick={() => setShowHelp((s) => !s)}
             style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 14px", background: "transparent", border: "none", cursor: "pointer", fontSize: "13px", fontWeight: 600 }}
@@ -959,12 +964,12 @@ function FishingLog() {
         </div>
 
         {/* ジグ在庫管理 */}
-        <div style={{ background: "#fff", border: "1px solid #e0e0e0", borderRadius: "6px", marginBottom: "16px", overflow: "hidden" }}>
+        <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: "16px", marginBottom: "12px", overflow: "hidden" }}>
           <button
             onClick={() => setShowJigManager((s) => !s)}
             style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 14px", background: "transparent", border: "none", cursor: "pointer", fontSize: "13px", fontWeight: 600 }}
           >
-            <span>持っているジグの管理 {jigs.length > 0 && `(${jigs.length}個)`}</span>
+            <span>持っている道具の管理（ルアー・エギ・仕掛け） {jigs.length > 0 && `(${jigs.length}個)`}</span>
             <span style={{ color: "#999", fontWeight: 400 }}>{showJigManager ? "閉じる" : "開く"}</span>
           </button>
           {showJigManager && (
@@ -973,7 +978,7 @@ function FishingLog() {
                 <input
                   type="text"
                   style={input}
-                  placeholder="例: ダイソージグ 60g 赤金"
+                  placeholder="例: エギ王TR 3号 アジ金"
                   value={newJig}
                   onChange={(e) => setNewJig(e.target.value)}
                   onKeyDown={(e) => {
@@ -987,7 +992,7 @@ function FishingLog() {
                 <button
                   type="button"
                   onClick={() => { addJig(newJig); setNewJig(""); }}
-                  style={{ padding: "0 16px", background: "#333", color: "#fff", border: "none", borderRadius: "4px", fontSize: "13px", cursor: "pointer", whiteSpace: "nowrap" }}
+                  style={{ padding: "0 16px", background: "#0a2540", color: "#fff", border: "none", borderRadius: "8px", fontSize: "13px", cursor: "pointer", whiteSpace: "nowrap" }}
                 >
                   追加
                 </button>
@@ -1014,44 +1019,55 @@ function FishingLog() {
           )}
         </div>
 
-        <form onSubmit={handleSubmit} style={{ background: "#fff", border: editingId ? "1px solid #e6c200" : "1px solid #e0e0e0", borderRadius: "6px", padding: "20px", marginBottom: "24px" }}>
+        <form onSubmit={handleSubmit} style={{ background: "#fff", border: editingId ? "1px solid #e6c200" : "1px solid #e2e8f0", borderRadius: "16px", padding: "18px 16px", marginBottom: "24px" }}>
           {editingId && (
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#fff8e6", border: "1px solid #e6c200", borderRadius: "6px", padding: "8px 12px", marginBottom: "14px", fontSize: "13px" }}>
               <span style={{ color: "#8a6d00", fontWeight: 600 }}>✏️ この釣行を編集中</span>
               <button type="button" onClick={cancelEdit} style={{ fontSize: "12px", color: "#8a6d00", background: "transparent", border: "1px solid #e6c200", borderRadius: "4px", padding: "4px 10px", cursor: "pointer" }}>編集をやめる</button>
             </div>
           )}
-          <div style={sectionLabel}>その日の条件(釣行全体で共通)</div>
-
           <button
             type="button"
             onClick={autofill}
             disabled={autoLoading}
             style={{
-              width: "100%", padding: "11px", marginBottom: "6px",
-              background: autoLoading ? "#eef3fa" : "#eaf1fb", color: "#2c5a9e",
-              border: "1px solid #4a7dbd", borderRadius: "6px",
-              fontSize: "14px", fontWeight: 600, cursor: autoLoading ? "default" : "pointer",
+              width: "100%", padding: "14px", marginBottom: "6px",
+              background: autoLoading ? "#7fa9cf" : "#0a6cb3", color: "#fff",
+              border: "none", borderRadius: "12px",
+              fontSize: "15px", fontWeight: 800, cursor: autoLoading ? "default" : "pointer",
             }}
           >
-            {autoLoading ? "取得中…" : "📍 現在地から自動入力（天気・風・波・水温・潮）"}
+            {autoLoading ? "取得中…" : "📍 現在地から天気と潮を自動入力"}
           </button>
-          <div style={{ fontSize: "11px", color: "#999", marginBottom: "16px" }}>
-            電波のある出艇地点で押すと、いまの気象・海況と今日の潮を自動で埋めます（各欄は後から手直しできます）
+          <div style={{ fontSize: "11.5px", color: "#67778a", marginBottom: "16px", lineHeight: 1.6 }}>
+            電波のある浜で押すと、いまの天気・風・波・水温と今日の潮が入ります。あとから手で直せます。
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "12px", marginBottom: "12px" }}>
             <div>
               <label style={label}>日付</label>
               <input type="date" style={input} value={form.date} onChange={handleChange("date")} />
             </div>
             <div>
-              <label style={label}>場所(緯度経度・自分用メモなど)</label>
-              <input type="text" style={input} placeholder="例: 36.7123, 137.2456 または魚探のウェイポイント名" value={form.locationTag} onChange={handleChange("locationTag")} />
+              <label style={label}>場所（自分用のメモ）</label>
+              <input type="text" style={input} placeholder="例: 36.71, 137.24 やポイント名" value={form.locationTag} onChange={handleChange("locationTag")} />
             </div>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px", marginBottom: "12px" }}>
+          <button
+            type="button"
+            onClick={() => setShowCond((v) => !v)}
+            style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", padding: "11px 12px", marginBottom: showCond ? "12px" : "20px", background: "#f3f6f9", border: "1px solid #e2e8f0", borderRadius: "10px", cursor: "pointer", textAlign: "left" }}
+          >
+            <span style={{ fontSize: "13px", color: "#1c2733", lineHeight: 1.5 }}>
+              <b>天気・風・波・水温・潮</b>
+              <span style={{ display: "block", fontSize: "12px", color: "#67778a" }}>{condSummary || "まだ入っていません（上の自動入力で埋まります）"}</span>
+            </span>
+            <span style={{ fontSize: "12px", color: "#0a6cb3", fontWeight: 700, whiteSpace: "nowrap" }}>{showCond ? "とじる －" : "手で直す ＋"}</span>
+          </button>
+
+          {showCond && (<>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
             <div>
               <label style={label}>潮回り</label>
               <select style={input} value={form.tide} onChange={handleChange("tide")}>
@@ -1060,15 +1076,12 @@ function FishingLog() {
             </div>
             <div>
               <label style={label}>天気</label>
-              <input type="text" style={input} placeholder="晴れ/曇り" value={form.weather} onChange={handleChange("weather")} />
+              <input type="text" style={input} placeholder="例: 晴れ" value={form.weather} onChange={handleChange("weather")} />
             </div>
             <div>
               <label style={label}>風向・風速</label>
-              <input type="text" style={input} placeholder="例: 北西2m" value={form.wind} onChange={handleChange("wind")} />
+              <input type="text" style={input} placeholder="例: 北西 2m" value={form.wind} onChange={handleChange("wind")} />
             </div>
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "20px" }}>
             <div>
               <label style={label}>波高</label>
               <input type="text" style={input} placeholder="例: 0.3m" value={form.waveHeight} onChange={handleChange("waveHeight")} />
@@ -1080,9 +1093,10 @@ function FishingLog() {
           </div>
 
           <div style={{ marginBottom: "20px" }}>
-            <label style={label}>潮汐メモ(満潮・干潮の時刻など。潮汐アプリを見て書き写す)</label>
-            <input type="text" style={input} placeholder="例: 満潮 5:30/17:20、干潮 11:00" value={form.tideDetail} onChange={handleChange("tideDetail")} />
+            <label style={label}>潮汐メモ（満潮・干潮の時刻など）</label>
+            <input type="text" style={input} placeholder="例: 満潮 5:30、干潮 11:00" value={form.tideDetail} onChange={handleChange("tideDetail")} />
           </div>
+          </>)}
 
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
             <div style={sectionLabel}>釣果・反応(匹ごとに追加できます)</div>
@@ -1130,7 +1144,7 @@ function FishingLog() {
                   </div>
 
                   <div style={{ marginBottom: "8px" }}>
-                    <label style={label}>ジグ(在庫から選ぶ、または下の欄に直接入力)</label>
+                    <label style={label}>使った道具（ルアー・エギ・仕掛け）</label>
                     {jigs.length > 0 && (
                       <select
                         style={{ ...input, marginBottom: "6px" }}
@@ -1145,7 +1159,7 @@ function FishingLog() {
                       <input
                         type="text"
                         style={input}
-                        placeholder="直接入力もできます"
+                        placeholder="一覧に無ければここに入力"
                         value={c.jig}
                         onChange={handleCatchChange(c.id, "jig")}
                       />
@@ -1164,11 +1178,11 @@ function FishingLog() {
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "8px" }}>
                     <div>
                       <label style={label}>アクション</label>
-                      <input type="text" style={input} placeholder="例: ワンピッチジャーク" value={c.action} onChange={handleCatchChange(c.id, "action")} />
+                      <input type="text" style={input} placeholder="例: シャクリ" value={c.action} onChange={handleCatchChange(c.id, "action")} />
                     </div>
                     <div>
                       <label style={label}>反応があった層</label>
-                      <input type="text" style={input} placeholder="例: ボトムから3m" value={c.responseLayer} onChange={handleCatchChange(c.id, "responseLayer")} />
+                      <input type="text" style={input} placeholder="例: 底から3m" value={c.responseLayer} onChange={handleCatchChange(c.id, "responseLayer")} />
                     </div>
                   </div>
 
@@ -1197,7 +1211,7 @@ function FishingLog() {
                       <input
                         type="text"
                         style={input}
-                        placeholder="リストにない魚はここに入力(例: マゴチ)"
+                        placeholder="リストにない魚（例: マゴチ）"
                         value={species.includes(c.species) ? "" : c.species}
                         onChange={handleCatchChange(c.id, "species")}
                       />
@@ -1237,9 +1251,10 @@ function FishingLog() {
                   onClick={() => setForm((f) => ({ ...f, mood: m.v }))}
                   style={{
                     flex: 1,
-                    padding: "8px 4px",
-                    fontSize: "12px",
-                    borderRadius: "4px",
+                    padding: "12px 2px",
+                    fontSize: "13px",
+                    fontWeight: 700,
+                    borderRadius: "10px",
                     border: form.mood == m.v ? "1px solid #4a7dbd" : "1px solid #ccc",
                     background: form.mood == m.v ? "#eaf1fb" : "#fff",
                     color: form.mood == m.v ? "#2c5a9e" : "#666",
@@ -1258,12 +1273,13 @@ function FishingLog() {
             style={{
               width: "100%",
               padding: "11px",
-              background: "#333",
+              background: "#0a2540",
               color: "#fff",
               border: "none",
-              borderRadius: "4px",
-              fontSize: "14px",
-              fontWeight: 600,
+              borderRadius: "12px",
+              padding: "14px",
+              fontSize: "15px",
+              fontWeight: 800,
               cursor: saving ? "default" : "pointer",
               opacity: saving ? 0.6 : 1,
             }}
@@ -1346,8 +1362,10 @@ function FishingLog() {
         {loading ? (
           <div style={{ color: "#999", fontSize: "13px" }}>読み込み中…</div>
         ) : trips.length === 0 ? (
-          <div style={{ border: "1px dashed #ccc", borderRadius: "6px", padding: "28px 16px", textAlign: "center", color: "#999", fontSize: "13px" }}>
-            まだ記録がありません
+          <div style={{ border: "1px dashed #cfd8e3", borderRadius: "16px", padding: "24px 18px", textAlign: "center", color: "#67778a", fontSize: "13px", lineHeight: 1.75, background: "#fff" }}>
+            <b style={{ color: "#1c2733" }}>まだ記録がありません。</b><br />
+            上のフォームで最初の釣行を記録すると、ここに一覧・カレンダー・傾向が出ます。<br />
+            記録は、釣果予報の「あなたの実績」にも使われます。
           </div>
         ) : listView === "calendar" ? (
           calendarView()
