@@ -938,11 +938,13 @@ function FishingLog() {
       `}</style>
 
       <div style={{ maxWidth: "560px", margin: "0 auto" }}>
-        {/* 上部の紺の帯（アプリアイコンと同じ紺地に山吹の帳面）。見た目は index.html の .hero */}
-        <header className="hero">
-          <img className="hero-art" src="hero-note.webp" alt="" width="320" height="233" />
-          <h1 className="hero-title">釣行記録ノート</h1>
-          <p className="hero-lead">釣れた魚と時刻を残すと、<br />天気と潮は自動で入ります。<br />釣れなかった日も、記録を。</p>
+        {/* 上部の細い帯（アプリアイコンと同じ紺の帳面マーク）。見た目は index.html の .topbar */}
+        <header className="topbar">
+          <img className="topbar-mark" src="icon-192.png" alt="" width="34" height="34" />
+          <div>
+            <h1 className="topbar-title">釣行記録ノート</h1>
+            <p className="topbar-sub">天気と潮は自動で入ります。釣れなかった日も記録を。</p>
+          </div>
         </header>
 
         {/* 使い方・注意 */}
@@ -1024,22 +1026,23 @@ function FishingLog() {
         <form onSubmit={handleSubmit} style={{ background: "#fff", border: editingId ? "1px solid #e6c200" : "1px solid #e2e8f0", borderRadius: "16px", padding: "18px 16px", marginBottom: "24px" }}>
           {editingId && (
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#fff8e6", border: "1px solid #e6c200", borderRadius: "6px", padding: "8px 12px", marginBottom: "14px", fontSize: "13px" }}>
-              <span style={{ color: "#8a6d00", fontWeight: 600 }}>✏️ この釣行を編集中</span>
+              <span style={{ color: "#8a6d00", fontWeight: 600 }}>この釣行を編集中</span>
               <button type="button" onClick={cancelEdit} style={{ fontSize: "12px", color: "#8a6d00", background: "transparent", border: "1px solid #e6c200", borderRadius: "4px", padding: "4px 10px", cursor: "pointer" }}>編集をやめる</button>
             </div>
           )}
+          <h2 className="fsec">いつ・どこで</h2>
           <button
             type="button"
             onClick={autofill}
             disabled={autoLoading}
             style={{
-              width: "100%", padding: "14px", marginBottom: "6px",
-              background: autoLoading ? "#7fa9cf" : "#0a6cb3", color: "#fff",
-              border: "none", borderRadius: "12px",
-              fontSize: "15px", fontWeight: 800, cursor: autoLoading ? "default" : "pointer",
+              width: "100%", padding: "12px", marginBottom: "6px",
+              background: autoLoading ? "#eef3f8" : "#fff", color: "#0a6cb3",
+              border: "1.5px solid #0a6cb3", borderRadius: "12px",
+              fontSize: "14px", fontWeight: 700, cursor: autoLoading ? "default" : "pointer",
             }}
           >
-            {autoLoading ? "取得中…" : "📍 現在地から天気と潮を自動入力"}
+            {autoLoading ? "取得中…" : "現在地から天気と潮を自動入力"}
           </button>
           <div style={{ fontSize: "11.5px", color: "#67778a", marginBottom: "16px", lineHeight: 1.6 }}>
             電波のある浜で押すと、いまの天気・風・波・水温と今日の潮が入ります。あとから手で直せます。
@@ -1101,7 +1104,7 @@ function FishingLog() {
           </>)}
 
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
-            <div style={sectionLabel}>釣果・反応(匹ごとに追加できます)</div>
+            <h2 className="fsec" style={{ margin: 0 }}>釣れたもの<span className="fsec-note">1匹ごとに追加</span></h2>
             <button
               type="button"
               onClick={addCatchRow}
@@ -1238,6 +1241,7 @@ function FishingLog() {
             })}
           </div>
 
+          <h2 className="fsec">ふりかえり</h2>
           <div style={{ marginBottom: "12px" }}>
             <label style={label}>釣行全体の考察・気づき</label>
             <textarea style={{ ...input, minHeight: "72px", resize: "vertical" }} placeholder="今日全体を通しての気づき。次回試したいこと。" value={form.reflection} onChange={handleChange("reflection")} />
@@ -1274,8 +1278,8 @@ function FishingLog() {
             disabled={saving}
             style={{
               width: "100%",
-              padding: "11px",
-              background: "#0a2540",
+              background: "#cf3a7f",
+              boxShadow: "0 3px 0 #a52a63",
               color: "#fff",
               border: "none",
               borderRadius: "12px",
