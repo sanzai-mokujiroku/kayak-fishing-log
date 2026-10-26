@@ -1381,7 +1381,7 @@ function FishingLog() {
 
         {/* 姉妹ツール：アプリアイコンを並べる（見た目は index.html の .sisters） */}
         <nav className="sisters" aria-label="姉妹ツールとブログ">
-          <p className="sisters-cap">富山湾カヤックの、姉妹ツール</p>
+          <p className="sisters-cap">カヤック釣りの、姉妹ツール</p>
           <div className="sisters-row">
             {[["kayak-go-check", "出艇判断"], ["kayak-fish-forecast", "釣果予報"], ["kayak-depth-map", "水深マップ"]].map(([repo, name]) => (
               <a key={repo} href={`https://sanzai-mokujiroku.github.io/${repo}/`}><img src={`https://sanzai-mokujiroku.github.io/${repo}/icon-180.png`} alt="" width="58" height="58" loading="lazy" />{name}</a>
